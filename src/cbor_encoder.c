@@ -22,8 +22,12 @@
 **
 ****************************************************************************/
 
-#include "cbor.h"
+#include "cbor_const.h"
+#include "fp16.h"
+#include "endian.h"
 #include <math.h>
+#include <stdint.h>
+#include <string.h>
 
 static size_t __cbor_create_integer(bool positive, int64_t val, uint8_t *buf)
 {
