@@ -26,6 +26,7 @@
 #define ENDIAN_H
 
 #include <stdint.h>
+#include "fp16.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,32 @@ extern "C" {
 uint16_t endian_swap16(uint16_t n);
 uint32_t endian_swap32(uint32_t n);
 uint64_t endian_swap64(uint64_t n);
+
+// network bytes to short
+uint16_t nbtos(uint8_t *p);
+// network bytes to long
+uint32_t nbtol(uint8_t *p);
+// network bytes to long long
+uint64_t nbtoll(uint8_t *p);
+// network bytes to float16
+half nbtoh(uint8_t *p);
+// network bytes to float
+float nbtof(uint8_t *p);
+// network bytes to double
+double nbtod(uint8_t *p);
+
+// short to network bytes
+void stonb(uint16_t s, uint8_t *p);
+// long to network bytes
+void ltonb(uint32_t l, uint8_t *p);
+// long long to network bytes
+void lltonb(uint64_t ll, uint8_t *p);
+// float16 to nework bytes
+void htonb(half h, uint8_t *p);
+// float to nework bytes
+void ftonb(float f, uint8_t *p);
+// double to nework bytes
+void dtonb(double d, uint8_t *p);
 
 #ifdef __cplusplus
 }
