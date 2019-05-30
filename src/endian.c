@@ -23,6 +23,7 @@
 ****************************************************************************/
 
 #include "endian.h"
+#include <string.h>
 
 #define LITTLE_ENDIAN		1
 #define BIG_ENDIAN			2
@@ -81,4 +82,80 @@ uint64_t endian_swap64(uint64_t n)
 		reverse((void *)&n, sizeof(uint64_t));
 	}
 	return n;
+}
+
+
+uint16_t nbtos(uint8_t *p)
+{
+	uint16_t u = 0;
+	memcpy(&u, p, sizeof(uint16_t));
+	return ntohs(u);
+}
+
+uint32_t nbtol(uint8_t *p)
+{
+	uint32_t u = 0;
+	memcpy(&u, p, sizeof(uint32_t));
+	return ntohl(u);
+}
+
+uint64_t nbtoll(uint8_t *p)
+{
+	uint64_t u = 0;
+	memcpy(&u, p, sizeof(uint64_t));
+	return ntohll(u);
+}
+
+half nbtoh(uint8_t *p)
+{
+	uint16_t u = nbtos(p);
+	return *((half *)&u);
+}
+
+float nbtof(uint8_t *p)
+{
+	uint32_t u = nbtol(p);
+	return *((float *)&u);
+}
+
+double nbtod(uint8_t *p)
+{
+	uint64_t u = nbtoll(p);
+	return *((double *)&u);
+}
+
+void stonb(uint16_t s, uint8_t *p)
+{
+	uint16_t u = htons(s);
+	memcpy(p, &u, sizeof(uint16_t));
+}
+
+void ltonb(uint32_t l, uint8_t *p)
+{
+	uint32_t u = htonl(l);
+	memcpy(p, &u, sizeof(uint32_t));
+}
+
+void lltonb(uint64_t ll, uint8_t *p)
+{
+	uint64_t u = htonll(ll);
+	memcpy(p, &u, sizeof(uint64_t));
+}
+
+void htonb(half h, uint8_t *p)
+{
+	uint16_t u = htons(*((uint16_t *)(&h)));
+	memcpy(p, &u, sizeof(uint16_t));
+}
+
+void ftonb(float f, uint8_t *p)
+{
+	uint32_t u = htonl(*((uint32_t *)(&f)));
+	memcpy(p, &u, sizeof(uint32_t));
+}
+
+void dtonb(double d, uint8_t *p)
+{
+	uint64_t u = htonll(*((uint64_t *)(&d)));
+	memcpy(p, &u, sizeof(uint64_t));
 }
