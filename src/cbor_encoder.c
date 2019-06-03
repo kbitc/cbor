@@ -22,248 +22,427 @@
 **
 ****************************************************************************/
 
-#include "cbor_const.h"
+#include "cbor.h"
 #include "fp16.h"
 #include "endian.h"
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
-static size_t __cbor_create_integer(bool positive, int64_t val, uint8_t *buf)
+cbor_t *cbor_create(size_t size)
+{
+	cbor_t *cbor = (cbor_t *)malloc(sizeof(cbor_t));
+	if (cbor != NULL)
+	{
+		cbor->buf = (uint8_t *)malloc(sizeof(uint8_t) * size);
+		if (cbor->buf == NULL)
+		{
+			free(cbor);
+			cbor = NULL;
+		}
+		else
+		{
+			cbor->offset = 0;
+			cbor->size = size;
+		}
+	}
+	return cbor;
+}
+
+void cbor_free(cbor_t *cbor)
+{
+	if (cbor != NULL)
+	{
+		if (cbor->buf != NULL)
+		{
+			free(cbor->buf);
+		}
+		free(cbor);
+	}
+}
+
+__attribute__((weak)) bool ensure_capacity(cbor_t *cbor, size_t size)
+{
+	return cbor->offset + size <= cbor->size;
+}
+
+static bool __cbor_create_int(cbor_t *cbor, int64_t val, bool offsetitive)
 {
 	uint64_t uv = (uint64_t)val;
-	if (!positive && (val & 0x8000000000000000))
+	uint8_t ib_mt = IB_UINT;
+	if (!offsetitive && (val & 0x8000000000000000))
 	{
 		uv = ~uv;
-		buf[0] = IB_NEGINT;
-	}
-	else
-	{
-		buf[0] = IB_UINT;
+		ib_mt = IB_NEGINT;
 	}
 
 	if (uv <= 23)
 	{
-		buf[0] |= uv;
-		return 1;
+		if (ensure_capacity(cbor, 1))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | uv;
+			return true;
+		}
 	}
 	else if (uv <= 255)
 	{
-		buf[0] |= AI_1;
-		buf[1] = uv;
-		return 2;
+		if (ensure_capacity(cbor, 2))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_1;
+			cbor->buf[cbor->offset++] = uv;
+			return true;
+		}
 	}
 	else if (uv <= 65535)
 	{
-		buf[0] |= AI_2;
-		stonb((uint16_t)uv, buf + 1);
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_2;
+			stonb((uint16_t)uv, cbor->buf + cbor->offset);
+			cbor->offset += 2;
+			return true;
+		}
 	}
 	else if (uv <= 4294967295)
 	{
-		buf[0] |= AI_4;
-		ltonb((uint32_t)uv, buf + 1);
-		return 5;
+		if (ensure_capacity(cbor, 5))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_4;
+			ltonb((uint32_t)uv, cbor->buf + cbor->offset);
+			cbor->offset += 4;
+			return true;
+		}
 	}
 	else
 	{
-		buf[0] |= AI_8;
-		lltonb(uv, buf + 1);
-		return 9;
+		if (ensure_capacity(cbor, 9))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_8;
+			lltonb(uv, cbor->buf + cbor->offset);
+			cbor->offset += 8;
+			return true;
+		}
 	}
+	return false;
 }
 
-size_t cbor_create_int(int64_t val, uint8_t *buf)
+bool cbor_set_int(cbor_t *cbor, int64_t val)
 {
-	return __cbor_create_integer(false, val, buf);
+	return __cbor_create_int(cbor, val, false);
 }
 
-size_t cbor_create_uint(uint64_t val, uint8_t *buf)
+bool cbor_set_uint(cbor_t *cbor, uint64_t val)
 {
-	return __cbor_create_integer(true, val, buf);
+	return __cbor_create_int(cbor, val, true);
 }
 
-static size_t __cbor_create_bytes(uint8_t ib_mt, const uint8_t *bytes, uint8_t *buf, size_t len)
+
+static bool __cbor_create_bytes(cbor_t *cbor, const uint8_t *bytes, size_t len, uint8_t ib_mt)
 {
 	if (len <= 23)
 	{
-		buf[0] = ib_mt | len;
-		memcpy(buf + 1, bytes, len);
-		return len + 1;
+		if (ensure_capacity(cbor, 1 + len))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | len;
+			memcpy(cbor->buf + cbor->offset, bytes, len);
+			cbor->offset += len;
+			return true;
+		}
 	}
 	else if (len <= 255)
 	{
-		buf[0] = ib_mt | AI_1;
-		buf[1] = len;
-		memcpy(buf + 2, bytes, len);
-		return len + 2;
+		if (ensure_capacity(cbor, 2 + len))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_1;
+			cbor->buf[cbor->offset++] = len;
+			memcpy(cbor->buf + cbor->offset, bytes, len);
+			cbor->offset += len;
+			return true;
+		}
 	}
 	else if (len <= 65535)
 	{
-		buf[0] = ib_mt | AI_2;
-		stonb(len, buf + 1);
-		memcpy(buf + 3, bytes, len);
-		return len + 3;
+		if (ensure_capacity(cbor, 3 + len))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_2;
+			stonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 2;
+			memcpy(cbor->buf + cbor->offset, bytes, len);
+			cbor->offset += len;
+			return true;
+		}
 	}
 	else if (len <= 4294967295)
 	{
-		buf[0] = ib_mt | AI_4;
-		ltonb(len, buf + 1);
-		memcpy(buf + 5, bytes, len);
-		return len + 5;
+		if (ensure_capacity(cbor, 5 + len))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_4;
+			ltonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 4;
+			memcpy(cbor->buf + cbor->offset, bytes, len);
+			cbor->offset += len;
+			return true;
+		}
 	}
 	else
 	{
-		buf[0] = ib_mt | AI_8;
-		lltonb(len, buf + 1);
-		memcpy(buf + 9, bytes, len);
-		return len + 9;
+		if (ensure_capacity(cbor, 9 + len))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_8;
+			lltonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 8;
+			memcpy(cbor->buf + cbor->offset, bytes, len);
+			cbor->offset += len;
+			return true;
+		}
 	}
+	return false;
 }
 
-size_t cbor_create_bytes(const uint8_t *bytes, uint8_t *buf, size_t len)
+bool cbor_set_bytes(cbor_t *cbor, const uint8_t *bytes, size_t len)
 {
-	return __cbor_create_bytes(IB_BYTES, bytes, buf, len);
+	return __cbor_create_bytes(cbor, bytes, len, IB_BYTES);
 }
 
-size_t cbor_create_string(const char *str, uint8_t *buf)
+bool cbor_set_string(cbor_t *cbor, const char *str)
 {
-	return __cbor_create_bytes(IB_STRING, (const uint8_t *)str, buf, strlen(str));
+	return __cbor_create_bytes(cbor, (const uint8_t *)str, strlen(str), IB_STRING);
 }
 
-static size_t __cbor_create_set(uint8_t ib_mt, size_t len, uint8_t *buf)
+
+bool cbor_begin_bytes(cbor_t *cbor)
+{
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = IB_BYTES | AI_INDEF;
+		return true;
+	}
+	return false;
+}
+
+bool cbor_end_bytes(cbor_t *cbor)
+{
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = AI_BRKCD;
+		return true;
+	}
+	return false;
+}
+
+bool cbor_begin_string(cbor_t *cbor)
+{
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = IB_STRING | AI_INDEF;
+		return true;
+	}
+	return false;
+}
+
+bool cbor_end_string(cbor_t *cbor)
+{
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = AI_BRKCD;
+		return true;
+	}
+	return false;
+}
+
+
+static bool __cbor_create_set(cbor_t *cbor, size_t len, uint8_t ib_mt)
 {
 	if (len <= 23)
 	{
-		buf[0] = ib_mt | len;
-		return 1;
+		if (ensure_capacity(cbor, 1))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | len;
+			return true;
+		}
 	}
 	else if (len <= 255)
 	{
-		buf[0] = ib_mt | AI_1;
-		buf[1] = len;
-		return 2;
+		if (ensure_capacity(cbor, 2))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_1;
+			cbor->buf[cbor->offset++] = len;
+			return true;
+		}
 	}
 	else if (len <= 65535)
 	{
-		buf[0] = ib_mt | AI_2;
-		stonb(len, buf + 1);
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_2;
+			stonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 2;
+			return true;
+		}
 	}
 	else if (len <= 4294967295)
 	{
-		buf[0] = ib_mt | AI_4;
-		stonb(len, buf + 1);
-		return 5;
+		if (ensure_capacity(cbor, 5))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_4;
+			ltonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 4;
+			return true;
+		}
 	}
 	else
 	{
-		buf[0] = ib_mt | AI_8;
-		stonb(len, buf + 1);
-		return 9;
+		if (ensure_capacity(cbor, 9))
+		{
+			cbor->buf[cbor->offset++] = ib_mt | AI_8;
+			lltonb(len, cbor->buf + cbor->offset);
+			cbor->offset += 8;
+			return true;
+		}
 	}
+	return false;
 }
 
-size_t cbor_create_array(size_t len, uint8_t *buf)
+bool cbor_set_array(cbor_t *cbor, size_t len)
 {
-	return __cbor_create_set(IB_ARRAY, len, buf);
+	return __cbor_create_set(cbor, len, IB_ARRAY);
 }
 
-size_t cbor_create_map(size_t len, uint8_t *buf)
+bool cbor_set_map(cbor_t *cbor, size_t len)
 {
-	return __cbor_create_set(IB_MAP, len, buf);
+	return __cbor_create_set(cbor, len, IB_MAP);
 }
 
-static size_t __cbor_begin_set(uint8_t ib, uint8_t *buf)
+static bool __cbor_begin_set(cbor_t *cbor, uint8_t ib_mt)
 {
-	buf[0] = ib | AI_INDEF;
-	return 1;
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = ib_mt | AI_INDEF;
+		return true;
+	}
+	return false;
 }
 
-static size_t __cbor_end_set(uint8_t *buf)
+static bool __cbor_end_set(cbor_t *cbor)
 {
-	buf[0] = AI_BRKCD;
-	return 1;
+	if (ensure_capacity(cbor, 1))
+	{
+		cbor->buf[cbor->offset++] = AI_BRKCD;
+		return true;
+	}
+	return false;
 }
 
-size_t cbor_begin_array(uint8_t *buf)
+bool cbor_begin_array(cbor_t *cbor)
 {
-	return __cbor_begin_set(IB_ARRAY, buf);
+	return __cbor_begin_set(cbor, IB_ARRAY);
 }
 
-size_t cbor_end_array(uint8_t *buf)
+bool cbor_end_array(cbor_t *cbor)
 {
-	return __cbor_end_set(buf);
+	return __cbor_end_set(cbor);
 }
 
-size_t cbor_begin_map(uint8_t *buf)
+bool cbor_begin_map(cbor_t *cbor)
 {
-	return __cbor_begin_set(IB_MAP, buf);
+	return __cbor_begin_set(cbor, IB_MAP);
 }
 
-size_t cbor_end_map(uint8_t *buf)
+bool cbor_end_map(cbor_t *cbor)
 {
-	return __cbor_end_set(buf);
+	return __cbor_end_set(cbor);
 }
 
-size_t cbor_create_float(double val, uint8_t *buf)
+
+bool cbor_set_float(cbor_t *cbor, double val)
 {
 	if (val == 0.0)									// 0.0, -0.0
 	{
-		buf[0] = IB_PRIM | AI_2;
-		buf[1] = 0x00;
-		buf[2] = 0x00;
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_2;
+			cbor->buf[cbor->offset++] = 0x00;
+			cbor->buf[cbor->offset++] = 0x00;
+			return true;
+		}
 	}
 	else if (!isfinite(val))						// Infinity
 	{
-		buf[0] = IB_PRIM | AI_2;
-		buf[1] = 0x7c;
-		buf[2] = 0x00;
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_2;
+			cbor->buf[cbor->offset++] = 0x7c;
+			cbor->buf[cbor->offset++] = 0x00;
+			return true;
+		}
 	}
 	else if (isnan(val))							// NaN
 	{
-		buf[0] = IB_PRIM | AI_2;
-		buf[1] = 0x7e;
-		buf[2] = 0x00;
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_2;
+			cbor->buf[cbor->offset++] = 0x7e;
+			cbor->buf[cbor->offset++] = 0x00;
+			return true;
+		}
 	}
 	
 	float fval = (float)val;
 	if (fval != val)								// double
 	{
-		buf[0] = IB_PRIM | AI_8;
-		dtonb(val, buf + 1);
-		return 9;
+		if (ensure_capacity(cbor, 9))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_8;
+			dtonb(val, cbor->buf + cbor->offset);
+			cbor->offset += 8;
+			return true;
+		}
 	}
 	else if (is_ftoh_loss(fval))					// float
 	{
-		buf[0] = IB_PRIM | AI_4;
-		ftonb(fval, buf + 1);
-		return 5;
+		if (ensure_capacity(cbor, 5))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_4;
+			ftonb(fval, cbor->buf + cbor->offset);
+			cbor->offset += 4;
+			return true;
+		}
 	}
 	else											// float16
 	{
-		half hval = ftoh(fval);
-		buf[0] = IB_PRIM | AI_2;
-		htonb(hval, buf + 1);
-		return 3;
+		if (ensure_capacity(cbor, 3))
+		{
+			half hval = ftoh(fval);
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_2;
+			htonb(hval, cbor->buf + cbor->offset);
+			cbor->offset += 2;
+			return true;
+		}
 	}
+
+	return false;
 }
 
-size_t cbor_create_simple(uint8_t val, uint8_t *buf)
+
+bool cbor_set_simple(cbor_t *cbor, uint8_t val)
 {
 	if (val <= 23 || val == AI_INDEF)
 	{
-		buf[0] = IB_PRIM | val;
-		return 1;
+		if (ensure_capacity(cbor, 1))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | val;
+			return true;
+		}
 	}
 	else if (val >=32)
 	{
-		buf[0] = IB_PRIM | AI_1;
-		buf[1] = val;
-		return 2;
+		if (ensure_capacity(cbor, 2))
+		{
+			cbor->buf[cbor->offset++] = IB_PRIM | AI_1;
+			cbor->buf[cbor->offset++] = val;
+			return true;
+		}
 	}
-	return 0;
+	return false;
 }
