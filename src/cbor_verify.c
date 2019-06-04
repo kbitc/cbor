@@ -24,31 +24,106 @@
 
 #include "cbor.h"
 
-static int __cbor_verify(uint8_t *buf, size_t *pos, size_t end)
+int cbor_verify(uint8_t *buf, size_t size, size_t *pos)
 {
+	if (buf[*pos] == AI_BRKCD)
+	{
+		return CBOR_ERR_BREAK_OUTSIDE_INDEF;
+	}
+
 	uint8_t ib_mt = buf[*pos] & 0xe0;
 	uint8_t ib_ai = buf[*pos] & 0x1f;
-	if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
+	if (ib_ai < 28)
 	{
-		if (ib_ai == AI_INDEF)
+		size_t len = (ib_ai == AI_1) ? 1 \
+			: (ib_ai == AI_2) ? 2 \
+			: (ib_ai == AI_4) ? 4 \
+			: (ib_ai == AI_8) ? 8 \
+			: 0;
+		if (!ensure_capacity(buf, size, *pos + len + 1))
 		{
-			++*pos;
+			return CBOR_ERR_OUT_OF_DATA;
+		}
+		
+		++*pos;
+		uint64_t val = (len == 1) ? buf[*pos] \
+			: (len == 2) ? nbtos(buf + *pos) \
+			: (len == 4) ? nbtol(buf + *pos) \
+			: (len == 8) ? nbtoll(buf + *pos) \
+			: ib_ai;
+		*pos += len;
 
-			size_t count = 0;
-			while (*pos <= end)
+		if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
+		{
+			if (!ensure_capacity(buf, size, *pos + val))
 			{
-				if (buf[*pos] == AI_BRKCD)
+				return CBOR_ERR_OUT_OF_DATA;
+			}
+			
+			*pos += val;
+		}
+		else if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
+		{
+			if (ib_mt == IB_MAP && val % 2 == 1)
+			{
+				return CBOR_ERR_ODD_SIZE_INDEF_MAP;
+			}
+
+			for (uint64_t i = 0; i < val; i++)
+			{
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
 				{
-					++*pos;
-					if (ib_mt == IB_MAP && count % 2 == 1)
-					{
-						return CBOR_ERR_ODD_SIZE_INDEF_MAP;
-					}
-					return CBOR_NO_ERROR;
+					return ret;
 				}
-				
-				int ret = __cbor_verify(buf, pos, end);
-				if (ret)
+			}
+		}
+		else if (ib_mt == IB_TAG)
+		{
+			return cbor_verify_tag(buf, size, pos, val);
+		}
+		return CBOR_NO_ERROR;
+	}
+	else if (ib_ai < AI_INDEF)
+	{
+		return CBOR_ERR_RESERVED_AI;
+	}
+	else // if (ib_ai == AI_INDEF)
+	{
+		if (ib_mt != IB_BYTES && ib_mt != IB_STRING && ib_mt != IB_ARRAY && ib_mt != IB_MAP)
+		{
+			return CBOR_ERR_MT_UNDEF_FOR_INDEF;
+		}
+
+		if (!ensure_capacity(buf, size, *pos + 2))
+		{
+			return CBOR_ERR_OUT_OF_DATA;
+		}
+
+		++*pos;
+		if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
+		{
+			while (buf[*pos] != AI_BRKCD)
+			{
+				if ((buf[*pos] & 0xe) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
+				{
+					return CBOR_ERR_BYTES_TEXT_MISMATCH;
+				}
+
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
+				{
+					return ret;
+				}
+			}
+		}
+		else // if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
+		{
+			uint64_t count = 0; 
+			while (buf[*pos] != AI_BRKCD)
+			{
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
 				{
 					return ret;
 				}
@@ -56,199 +131,23 @@ static int __cbor_verify(uint8_t *buf, size_t *pos, size_t end)
 				count++;
 			}
 
-			return CBOR_ERR_OUT_OF_DATA;
-		}
-		else
-		{
-			size_t count = 0;
-			if (ib_ai <= 23)
+			if (ib_mt == IB_MAP && count % 2 == 1)
 			{
-				count = ib_ai;
-				++*pos;
+				return CBOR_ERR_ODD_SIZE_INDEF_MAP;
 			}
-			else if (ib_ai == AI_1)
-			{
-				count = buf[++*pos];
-				++*pos;
-			}
-			else if (ib_ai == AI_2)
-			{
-				count = nbtos(buf + ++*pos);
-				*pos += 2;
-			}
-			else if (ib_ai == AI_4)
-			{
-				count = nbtol(buf + ++*pos);
-				*pos += 4;
-			}
-			else if (ib_ai == AI_8)
-			{
-				count = nbtoll(buf + ++*pos);
-				*pos += 8;
-			}
-			else
-			{
-				return CBOR_ERR_RESERVED_AI;
-			}
-
-			if (ib_mt == IB_MAP)
-			{
-				count <<= 1;
-			}
-
-			for (size_t i = 0; i < count; i++)
-			{
-				if (buf[*pos] == AI_BRKCD)
-				{
-					return CBOR_ERR_BREAK_OUTSIDE_INDEF;
-				}
-
-				int ret = __cbor_verify(buf, pos, end);
-				if (ret)
-				{
-					return ret;
-				}
-			}
-
-			return CBOR_NO_ERROR;
 		}
-	}
-	else if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
-	{
-		if (ib_ai == AI_INDEF)
-		{
-			++*pos;
-
-			while (*pos <= end)
-			{
-				if (buf[*pos] == AI_BRKCD)
-				{
-					++*pos;
-					return CBOR_NO_ERROR;
-				}
-
-				uint8_t sub_ib_mt = buf[*pos] & 0xe0;
-				if (sub_ib_mt != ib_mt)
-				{
-					return CBOR_ERR_BYTES_TEXT_MISMATCH;
-				}
-				
-				int ret = __cbor_verify(buf, pos, end);
-				if (ret)
-				{
-					return ret;
-				}
-			}
-
-			return CBOR_ERR_OUT_OF_DATA;
-		}
-		else
-		{
-			if (ib_ai <= 23)
-			{
-				*pos += ib_ai + 1;
-			}
-			else if (ib_ai == AI_1)
-			{
-				size_t len = buf[++*pos];
-				*pos += len + 1;
-			}
-			else if (ib_ai == AI_2)
-			{
-				size_t len = nbtos(buf + ++*pos);
-				*pos += len + 2;
-			}
-			else if (ib_ai == AI_4)
-			{
-				size_t len = nbtol(buf + ++*pos);
-				*pos += len + 4;
-			}
-			else if (ib_ai == AI_8)
-			{
-				size_t len = nbtoll(buf + ++*pos);
-				*pos += len + 8;
-			}
-			else
-			{
-				return CBOR_ERR_RESERVED_AI;
-			}
-			return *pos > end + 1 ? CBOR_ERR_OUT_OF_DATA : 0;
-		}
-	}
-	else if (ib_mt == IB_UINT || ib_mt == IB_NEGINT)
-	{
-		if (ib_ai <= 23)
-		{
-			++*pos;
-		}
-		else if (ib_ai == AI_1)
-		{
-			*pos += 2;
-		}
-		else if (ib_ai == AI_2)
-		{
-			*pos += 3;
-		}
-		else if (ib_ai == AI_4)
-		{
-			*pos += 5;
-		}
-		else if (ib_ai == AI_8)
-		{
-			*pos += 9;
-		}
-		else
-		{
-			return CBOR_ERR_RESERVED_AI;
-		}
-		return *pos > end + 1 ? CBOR_ERR_OUT_OF_DATA : 0;
-	}
-	else if (ib_mt == IB_PRIM)
-	{
-		if (ib_ai <= 23)
-		{
-			++*pos;
-		}
-		else if (ib_ai == AI_1)
-		{
-			*pos += 2;
-		}
-		else if (ib_ai == AI_2)
-		{
-			*pos += 3;
-		}
-		else if (ib_ai == AI_4)
-		{
-			*pos += 5;
-		}
-		else if (ib_ai == AI_8)
-		{
-			*pos += 9;
-		}
-		else if (ib_ai == AI_INDEF)
-		{
-			return CBOR_ERR_BREAK_OUTSIDE_INDEF;
-		}
-		else
-		{
-			return CBOR_ERR_RESERVED_AI;
-		}
-		return *pos > end + 1 ? CBOR_ERR_OUT_OF_DATA : 0;
-	}
-	else	// TAG: not supported yet
-	{
 		++*pos;
-		return 0;
+		return CBOR_NO_ERROR;
 	}
 }
 
-int cbor_verify(cbor_t *cbor)
+int cbor_well_formed(uint8_t *buf, size_t size, size_t *err_pos)
 {
-	size_t pos = 0;
-	int ret = __cbor_verify(cbor->buf, &pos, cbor->offset - 1);
+	*err_pos = 0;
+	int ret = cbor_verify(buf, size, err_pos);
 	if (ret == CBOR_NO_ERROR)
 	{
-		if (pos < cbor->offset)
+		if (*err_pos < size)
 		{
 			return CBOR_ERR_NOT_ALL_DATA_CONSUMED;
 		}
