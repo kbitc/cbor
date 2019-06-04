@@ -55,9 +55,11 @@ extern "C" {
 #define CBOR_ERR_NOT_ALL_DATA_CONSUMED						2
 #define CBOR_ERR_ODD_SIZE_INDEF_MAP							3
 #define CBOR_ERR_BREAK_OUTSIDE_INDEF						4
-#define CBOR_ERR_RESERVED_AI								5
-#define CBOR_ERR_BYTES_TEXT_MISMATCH						6
-#define CBOR_ERR_OUT_OF_MEMORY								7
+#define CBOR_ERR_MT_UNDEF_FOR_INDEF							5
+#define CBOR_ERR_RESERVED_AI								6
+#define CBOR_ERR_BYTES_TEXT_MISMATCH						7
+#define CBOR_ERR_OUT_OF_MEMORY								8
+#define CBOR_ERR_SIMPLE_OUT_OF_SCOPE						9
 
 typedef struct 
 {
@@ -66,56 +68,95 @@ typedef struct
 	size_t size;
 } cbor_t;
 
+typedef enum
+{
+	/** false */
+	CBOR_FALSE,
+	/** true */
+	CBOR_TRUE,
+	/** null */
+	CBOR_NULL,
+	/** undefined */
+	CBOR_UNDEFINED,
+	/** Positive integers */
+	CBOR_UINT,
+	/** Negative integers */
+	CBOR_INT,
+	/** Byte string */
+	CBOR_BYTES,
+	/** UTF-8 string */
+	CBOR_TEXT,
+	/** Byte string, in chunks.  Each chunk is a child. */
+	CBOR_BYTES_CHUNKED,
+	/** UTF-8 string, in chunks.  Each chunk is a child */
+	CBOR_TEXT_CHUNKED,
+	/** Array of CBOR values.  Each array element is a child, in order */
+	CBOR_ARRAY,
+	/** Map of key/value pairs.  Each key and value is a child, alternating. */
+	CBOR_MAP,
+	/** Tag describing the next value.  The next value is the single child. */
+	CBOR_TAG,
+	/** Simple value, other than the defined ones */
+	CBOR_SIMPLE,
+	/** Doubles, floats, and half-floats */
+	CBOR_DOUBLE,
+	/** Floats, and half-floats */
+	CBOR_FLOAT,
+	/** An error has occurred */
+	CBOR_INVALID
+} cbor_type;
+
+typedef struct 
+{
+	cbor_type ct;
+	union
+	{
+		const void *bytes;
+		uint64_t uint;
+		int64_t sint;
+		double dbl;
+		float flt;
+	} v;
+	uint64_t count;
+} cbor_value_t;
+
 
 const char *cbor_get_error(int errno);
 
-int cbor_verify(cbor_t *cbor);
+int cbor_verify(uint8_t *buf, size_t size, size_t *pos);
+int cbor_verify_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag);
+int cbor_well_formed(uint8_t *buf, size_t size, size_t *err_pos);
 
-
-cbor_t *cbor_create(size_t size);
-void cbor_free(cbor_t *cbor);
-
-bool cbor_set_int(cbor_t *cbor, int64_t val);
-bool cbor_set_uint(cbor_t *cbor, uint64_t val);
-
-bool cbor_set_bytes(cbor_t *cbor, const uint8_t *bytes, size_t len);
-bool cbor_begin_bytes(cbor_t *cbor);
-bool cbor_end_bytes(cbor_t *cbor);
-
-bool cbor_set_string(cbor_t *cbor, const char *str);
-bool cbor_begin_string(cbor_t *cbor);
-bool cbor_end_string(cbor_t *cbor);
-
-bool cbor_set_array(cbor_t *cbor, size_t len);
-bool cbor_begin_array(cbor_t *cbor);
-bool cbor_end_array(cbor_t *cbor);
-
-bool cbor_set_map(cbor_t *cbor, size_t len);
-bool cbor_begin_map(cbor_t *cbor);
-bool cbor_end_map(cbor_t *cbor);
-
-bool cbor_set_float(cbor_t *cbor, double val);
-bool cbor_set_simple(cbor_t *cbor, uint8_t val);
-
-/*
-size_t cbor_create_int(int64_t val, uint8_t *buf);
-size_t cbor_create_uint(uint64_t val, uint8_t *buf);
-
-size_t cbor_create_bytes(const uint8_t *bytes, uint8_t *buf, size_t len);
-size_t cbor_create_string(const char *str, uint8_t *buf);
-
-size_t cbor_create_array(size_t len, uint8_t *buf);
-size_t cbor_create_map(size_t len, uint8_t *buf);
-
-size_t cbor_begin_array(uint8_t *buf);
-size_t cbor_end_array(uint8_t *buf);
-
-size_t cbor_begin_map(uint8_t *buf);
-size_t cbor_end_map(uint8_t *buf);
-
-size_t cbor_create_float(double val, uint8_t *buf);
-size_t cbor_create_simple(uint8_t val, uint8_t *buf);
-*/
+// 0. ensure buffer capacity
+bool ensure_capacity(uint8_t *buf, size_t size, size_t offset);
+// 1. encode signed integer
+int cbor_encode_int(uint8_t *buf, size_t size, size_t *pos, int64_t val);
+// 2. encode unsigned integer
+int cbor_encode_uint(uint8_t *buf, size_t size, size_t *pos, uint64_t val);
+// 3. encode tag
+int cbor_encode_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t val);
+// 4. encode simple
+int cbor_encode_simple(uint8_t *buf, size_t size, size_t *pos, uint8_t val);
+// 5. encode double, float and half
+int cbor_encode_float(uint8_t *buf, size_t size, size_t *pos, double val);
+// 6. encode bytes
+int cbor_encode_bytes(uint8_t *buf, size_t size, size_t *pos, const uint8_t *bytes, size_t len);
+// 7. encode indefinite-length bytes
+int cbor_encode_bytes_indef(uint8_t *buf, size_t size, size_t *pos);
+// 8. encode string
+int cbor_encode_string(uint8_t *buf, size_t size, size_t *pos, const char *str);
+// 9. encode indefinite-length string
+int cbor_encode_string_indef(uint8_t *buf, size_t size, size_t *pos);
+// 10. encode array
+int cbor_encode_array(uint8_t *buf, size_t size, size_t *pos, size_t len);
+// 11. encode indefinite-length array
+int cbor_encode_array_indef(uint8_t *buf, size_t size, size_t *pos, size_t len);
+// 12. encode map
+int cbor_encode_map(uint8_t *buf, size_t size, size_t *pos, size_t len);
+// 13. encode indefinite-length map
+int cbor_encode_map_indef(uint8_t *buf, size_t size, size_t *pos, size_t len);
+// 14. encode break code
+int cbor_encode_break(uint8_t *buf, size_t size, size_t *pos, const uint8_t *bytes, size_t len);
 
 #ifdef __cplusplus
 }
