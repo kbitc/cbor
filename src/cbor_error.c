@@ -30,9 +30,11 @@ const char *cbor_error_text[] = {
 	"CBOR_ERR_NOT_ALL_DATA_CONSUMED",
 	"CBOR_ERR_ODD_SIZE_INDEF_MAP",
 	"CBOR_ERR_BREAK_OUTSIDE_INDEF",
+	"CBOR_ERR_MT_UNDEF_FOR_INDEF",
 	"CBOR_ERR_RESERVED_AI",
 	"CBOR_ERR_BYTES_TEXT_MISMATCH",	// bytes/text mismatch (UTF-8 != ASCII-8BIT) in streaming string
-	"CBOR_ERR_OUT_OF_MEMORY"
+	"CBOR_ERR_OUT_OF_MEMORY",
+	"CBOR_ERR_SIMPLE_OUT_OF_SCOPE"
 };
 
 const char *cbor_get_error(int errno)
