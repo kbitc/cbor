@@ -110,6 +110,7 @@ typedef struct _cbor_t
 		float flt;
 	} v;
 	size_t size;
+	size_t count;
 	struct _cbor_t *next;
 } cbor_t;
 
@@ -119,15 +120,21 @@ void cbor_free(cbor_t *cbor);
 
 const char *cbor_get_error(int errno);
 
-int cbor_verify(uint8_t *buf, size_t size, size_t *pos);
-int cbor_verify_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag);
-int cbor_well_formed(uint8_t *buf, size_t size, size_t *err_pos);
+int cbor_verify(const uint8_t *buf, size_t size, size_t *pos);
+int cbor_verify_tag(const uint8_t *buf, size_t size, size_t *pos, uint64_t tag);
+int cbor_well_formed(const uint8_t *buf, size_t size, size_t *err_pos);
 
-int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor);
-int cbor_decode_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor);
+int cbor_decode(const uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor);
+int cbor_decode_tag(const uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor);
+
+int cbor_bytes_len(cbor_t *cbor, size_t *len);
+int cbor_bytes_cmp(cbor_t *cbor, const void *bytes, size_t size, int *res);
+
+int cbor_array_get(cbor_t *cbor, size_t index, cbor_t *val);
+int cbor_map_get(cbor_t *cbor, const char *key, cbor_t *val);
 
 // 0. ensure buffer capacity
-bool ensure_capacity(uint8_t *buf, size_t size, size_t offset);
+bool ensure_capacity(const uint8_t *buf, size_t size, size_t offset);
 // 1. encode signed integer
 int cbor_encode_int(uint8_t *buf, size_t size, size_t *pos, int64_t val);
 // 2. encode unsigned integer
@@ -149,13 +156,13 @@ int cbor_encode_string_indef(uint8_t *buf, size_t size, size_t *pos);
 // 10. encode array
 int cbor_encode_array(uint8_t *buf, size_t size, size_t *pos, size_t len);
 // 11. encode indefinite-length array
-int cbor_encode_array_indef(uint8_t *buf, size_t size, size_t *pos, size_t len);
+int cbor_encode_array_indef(uint8_t *buf, size_t size, size_t *pos);
 // 12. encode map
 int cbor_encode_map(uint8_t *buf, size_t size, size_t *pos, size_t len);
 // 13. encode indefinite-length map
-int cbor_encode_map_indef(uint8_t *buf, size_t size, size_t *pos, size_t len);
+int cbor_encode_map_indef(uint8_t *buf, size_t size, size_t *pos);
 // 14. encode break code
-int cbor_encode_break(uint8_t *buf, size_t size, size_t *pos, const uint8_t *bytes, size_t len);
+int cbor_encode_break(uint8_t *buf, size_t size, size_t *pos);
 
 #ifdef __cplusplus
 }
