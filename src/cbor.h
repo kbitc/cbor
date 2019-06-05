@@ -61,13 +61,6 @@ extern "C" {
 #define CBOR_ERR_OUT_OF_MEMORY								8
 #define CBOR_ERR_SIMPLE_OUT_OF_SCOPE						9
 
-typedef struct 
-{
-	uint8_t *buf;
-	size_t offset;
-	size_t size;
-} cbor_t;
-
 typedef enum
 {
 	/** false */
@@ -81,18 +74,18 @@ typedef enum
 	/** Positive integers */
 	CBOR_UINT,
 	/** Negative integers */
-	CBOR_INT,
+	CBOR_NEGINT,
 	/** Byte string */
 	CBOR_BYTES,
 	/** UTF-8 string */
-	CBOR_TEXT,
-	/** Byte string, in chunks.  Each chunk is a child. */
-	CBOR_BYTES_CHUNKED,
-	/** UTF-8 string, in chunks.  Each chunk is a child */
-	CBOR_TEXT_CHUNKED,
-	/** Array of CBOR values.  Each array element is a child, in order */
+	CBOR_STRING,
+	/** Byte string, in chunks */
+	CBOR_BYTES_INDEF,
+	/** UTF-8 string, in chunks */
+	CBOR_STRING_INDEF,
+	/** Array of CBOR values */
 	CBOR_ARRAY,
-	/** Map of key/value pairs.  Each key and value is a child, alternating. */
+	/** Map of key/value pairs */
 	CBOR_MAP,
 	/** Tag describing the next value.  The next value is the single child. */
 	CBOR_TAG,
@@ -101,24 +94,24 @@ typedef enum
 	/** Doubles, floats, and half-floats */
 	CBOR_DOUBLE,
 	/** Floats, and half-floats */
-	CBOR_FLOAT,
-	/** An error has occurred */
-	CBOR_INVALID
+	CBOR_FLOAT
 } cbor_type;
 
-typedef struct 
+typedef struct _cbor_t
 {
 	cbor_type ct;
 	union
 	{
-		const void *bytes;
-		uint64_t uint;
+		const uint8_t *bytes;
+		const char *str;
 		int64_t sint;
+		uint64_t uint;
 		double dbl;
 		float flt;
 	} v;
-	uint64_t count;
-} cbor_value_t;
+	size_t size;
+	struct _cbor_t *next;
+} cbor_t;
 
 
 const char *cbor_get_error(int errno);
@@ -126,6 +119,9 @@ const char *cbor_get_error(int errno);
 int cbor_verify(uint8_t *buf, size_t size, size_t *pos);
 int cbor_verify_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag);
 int cbor_well_formed(uint8_t *buf, size_t size, size_t *err_pos);
+
+int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor);
+int cbor_decode_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor);
 
 // 0. ensure buffer capacity
 bool ensure_capacity(uint8_t *buf, size_t size, size_t offset);
