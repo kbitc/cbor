@@ -30,3 +30,207 @@
 #include <string.h>
 #include <stdlib.h>
 
+int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
+{
+	if (buf[*pos] == AI_BRKCD)
+	{
+		return CBOR_ERR_BREAK_OUTSIDE_INDEF;
+	}
+
+	uint8_t ib_mt = buf[*pos] & 0xe0;
+	uint8_t ib_ai = buf[*pos] & 0x1f;
+	if (ib_ai < 28)
+	{
+		size_t len = (ib_ai == AI_1) ? 1 \
+			: (ib_ai == AI_2) ? 2 \
+			: (ib_ai == AI_4) ? 4 \
+			: (ib_ai == AI_8) ? 8 \
+			: 0;
+		if (!ensure_capacity(buf, size, *pos + len + 1))
+		{
+			return CBOR_ERR_OUT_OF_DATA;
+		}
+		
+		++*pos;
+		uint64_t val = (len == 1) ? buf[*pos] \
+			: (len == 2) ? nbtos(buf + *pos) \
+			: (len == 4) ? nbtol(buf + *pos) \
+			: (len == 8) ? nbtoll(buf + *pos) \
+			: ib_ai;
+		*pos += len;
+
+		if (ib_mt == IB_UINT)
+		{
+			cbor->ct = CBOR_UINT;
+			cbor->v.uint = val;
+		}
+		else if (ib_mt == IB_NEGINT)
+		{
+			cbor->ct = CBOR_NEGINT;
+			cbor->v.sint = (int64_t)~val;
+		}
+		if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
+		{
+			if (!ensure_capacity(buf, size, *pos + val))
+			{
+				return CBOR_ERR_OUT_OF_DATA;
+			}
+
+			cbor->ct = ib_mt == IB_BYTES ? CBOR_BYTES : CBOR_STRING;
+			cbor->v.bytes = buf + *pos;
+			cbor->size = val;
+
+			*pos += val;
+		}
+		else if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
+		{
+			if (ib_mt == IB_MAP && val % 2 == 1)
+			{
+				return CBOR_ERR_ODD_SIZE_INDEF_MAP;
+			}
+
+			size_t _pos = *pos;
+			for (uint64_t i = 0; i < val; i++)
+			{
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
+				{
+					return ret;
+				}
+			}
+
+			cbor->ct = ib_mt == IB_ARRAY ? CBOR_ARRAY : CBOR_MAP;
+			cbor->v.bytes = buf + _pos;
+			cbor->size = val;
+		}
+		else if (ib_mt == IB_TAG)
+		{
+			cbor->ct = CBOR_TAG;
+			cbor->v.uint = val;
+
+			cbor->next = (cbor_t *)malloc(sizeof(cbor_t));
+			if (cbor->next == NULL)
+			{
+				return CBOR_ERR_OUT_OF_MEMORY;
+			}
+			
+			int ret = cbor_decode_tag(buf, size, pos, val, cbor->next);
+			if (ret != CBOR_NO_ERROR)
+			{
+				free(cbor->next);
+				cbor->next = NULL;
+			}
+			return ret;
+		}
+		else // if (ib_mt == IB_PRIM)
+		{
+			if (ib_ai == 20)
+			{
+				cbor->ct = CBOR_FALSE;
+			}
+			else if (ib_ai == 21)
+			{
+				cbor->ct = CBOR_TRUE;
+			}
+			else if (ib_ai == 22)
+			{
+				cbor->ct = CBOR_NULL;
+			}
+			else if (ib_ai == 23)
+			{
+				cbor->ct = CBOR_UNDEFINED;
+			}
+			else if (ib_ai == AI_2)
+			{
+				cbor->ct = CBOR_FLOAT;
+				uint16_t s = (uint16_t)val;
+				cbor->v.flt = htof(*((half *)&s));
+			}
+			else if (ib_ai == AI_4)
+			{
+				cbor->ct = CBOR_FLOAT;
+				uint32_t l = (uint32_t)val;
+				cbor->v.flt = *((float *)&l);
+			}
+			else if (ib_ai == AI_8)
+			{
+				cbor->ct = CBOR_DOUBLE;
+				cbor->v.dbl = *((double *)&val);
+			}
+			else
+			{
+				cbor->ct = CBOR_SIMPLE;
+				cbor->v.uint = (uint8_t)val;
+			}
+		}
+		return CBOR_NO_ERROR;
+	}
+	else if (ib_ai < AI_INDEF)
+	{
+		return CBOR_ERR_RESERVED_AI;
+	}
+	else // if (ib_ai == AI_INDEF)
+	{
+		if (ib_mt != IB_BYTES && ib_mt != IB_STRING && ib_mt != IB_ARRAY && ib_mt != IB_MAP)
+		{
+			return CBOR_ERR_MT_UNDEF_FOR_INDEF;
+		}
+
+		if (!ensure_capacity(buf, size, *pos + 2))
+		{
+			return CBOR_ERR_OUT_OF_DATA;
+		}
+
+		++*pos;
+		if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
+		{
+			size_t _pos = *pos;
+			size_t count = 0;
+			while (buf[*pos] != AI_BRKCD)
+			{
+				if ((buf[*pos] & 0xe) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
+				{
+					return CBOR_ERR_BYTES_TEXT_MISMATCH;
+				}
+
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
+				{
+					return ret;
+				}
+
+				count++;
+			}
+
+			cbor->ct = ib_mt == IB_BYTES ? CBOR_BYTES_INDEF : CBOR_STRING_INDEF;
+			cbor->v.bytes = buf + _pos;
+			cbor->size = count;
+		}
+		else // if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
+		{
+			size_t _pos = *pos;
+			size_t count = 0; 
+			while (buf[*pos] != AI_BRKCD)
+			{
+				int ret = cbor_verify(buf, size, pos);
+				if (ret != CBOR_NO_ERROR)
+				{
+					return ret;
+				}
+
+				count++;
+			}
+
+			if (ib_mt == IB_MAP && count % 2 == 1)
+			{
+				return CBOR_ERR_ODD_SIZE_INDEF_MAP;
+			}
+
+			cbor->ct = ib_mt == IB_ARRAY ? CBOR_ARRAY : CBOR_MAP;
+			cbor->v.bytes = buf + _pos;
+			cbor->size = count;
+		}
+		++*pos;
+		return CBOR_NO_ERROR;
+	}
+}
