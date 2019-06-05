@@ -60,6 +60,9 @@ extern "C" {
 #define CBOR_ERR_BYTES_TEXT_MISMATCH						7
 #define CBOR_ERR_OUT_OF_MEMORY								8
 #define CBOR_ERR_SIMPLE_OUT_OF_SCOPE						9
+#define CBOR_ERR_MT_MISMATCH								10
+#define CBOR_ERR_ARRAY_INDEX_OUT_OF_BOUNDS					11
+#define CBOR_ERR_MAP_KEY_MISMATCH							12
 
 typedef enum
 {
