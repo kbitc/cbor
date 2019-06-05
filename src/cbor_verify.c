@@ -24,7 +24,7 @@
 
 #include "cbor.h"
 
-int cbor_verify(uint8_t *buf, size_t size, size_t *pos)
+int cbor_verify(const uint8_t *buf, size_t size, size_t *pos)
 {
 	if (buf[*pos] == AI_BRKCD)
 	{
@@ -105,7 +105,7 @@ int cbor_verify(uint8_t *buf, size_t size, size_t *pos)
 		{
 			while (buf[*pos] != AI_BRKCD)
 			{
-				if ((buf[*pos] & 0xe) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
+				if ((buf[*pos] & 0xe0) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
 				{
 					return CBOR_ERR_BYTES_TEXT_MISMATCH;
 				}
@@ -141,7 +141,7 @@ int cbor_verify(uint8_t *buf, size_t size, size_t *pos)
 	}
 }
 
-int cbor_well_formed(uint8_t *buf, size_t size, size_t *err_pos)
+int cbor_well_formed(const uint8_t *buf, size_t size, size_t *err_pos)
 {
 	*err_pos = 0;
 	int ret = cbor_verify(buf, size, err_pos);
