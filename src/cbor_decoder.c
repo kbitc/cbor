@@ -30,7 +30,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
+int cbor_decode(const uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 {
 	if (buf[*pos] == AI_BRKCD)
 	{
@@ -101,7 +101,8 @@ int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 
 			cbor->ct = ib_mt == IB_ARRAY ? CBOR_ARRAY : CBOR_MAP;
 			cbor->v.bytes = buf + _pos;
-			cbor->size = val;
+			cbor->count = val;
+			cbor->size = *pos - _pos;
 		}
 		else if (ib_mt == IB_TAG)
 		{
@@ -181,14 +182,13 @@ int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 			return CBOR_ERR_OUT_OF_DATA;
 		}
 
-		++*pos;
+		size_t _pos = ++*pos;
+		size_t count = 0;
 		if (ib_mt == IB_BYTES || ib_mt == IB_STRING)
 		{
-			size_t _pos = *pos;
-			size_t count = 0;
 			while (buf[*pos] != AI_BRKCD)
 			{
-				if ((buf[*pos] & 0xe) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
+				if ((buf[*pos] & 0xe0) != ib_mt /*|| (buf[*pos] & 0x1f) == AI_INDEF*/)
 				{
 					return CBOR_ERR_BYTES_TEXT_MISMATCH;
 				}
@@ -203,13 +203,9 @@ int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 			}
 
 			cbor->ct = ib_mt == IB_BYTES ? CBOR_BYTES_INDEF : CBOR_STRING_INDEF;
-			cbor->v.bytes = buf + _pos;
-			cbor->size = count;
 		}
 		else // if (ib_mt == IB_ARRAY || ib_mt == IB_MAP)
 		{
-			size_t _pos = *pos;
-			size_t count = 0; 
 			while (buf[*pos] != AI_BRKCD)
 			{
 				int ret = cbor_verify(buf, size, pos);
@@ -227,10 +223,11 @@ int cbor_decode(uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 			}
 
 			cbor->ct = ib_mt == IB_ARRAY ? CBOR_ARRAY : CBOR_MAP;
-			cbor->v.bytes = buf + _pos;
-			cbor->size = count;
 		}
-		++*pos;
+		cbor->v.bytes = buf + _pos;
+		cbor->count = count;
+		cbor->size = ++*pos - _pos;
+
 		return CBOR_NO_ERROR;
 	}
 }
