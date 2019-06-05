@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <string.h>
 
-bool ensure_capacity(uint8_t *buf, size_t size, size_t offset)
+bool ensure_capacity(const uint8_t *buf, size_t size, size_t offset)
 {
 	return size >= offset;
 }
@@ -142,7 +142,7 @@ int cbor_encode_float(uint8_t *buf, size_t size, size_t *pos, double val)
 	if (val == 0.0)									// 0.0, -0.0
 	{
 		buf[(*pos)++] = IB_PRIM | AI_2;
-		stonb(0x0000, buf + *pos);
+		stonb((*((uint64_t *)&val) & 0x8000000000000000) ? 0x8000 : 0x0000, buf + *pos);
 		*pos += 2;
 	}
 	else if (isnan(val))							// NaN
@@ -154,7 +154,7 @@ int cbor_encode_float(uint8_t *buf, size_t size, size_t *pos, double val)
 	else if (!isfinite(val))						// Infinity
 	{
 		buf[(*pos)++] = IB_PRIM | AI_2;
-		stonb(0x7c00, buf + *pos);
+		stonb((*((uint64_t *)&val) & 0x8000000000000000) ? 0xfc00 : 0x7c00, buf + *pos);
 		*pos += 2;
 	}
 	else
@@ -224,7 +224,7 @@ int cbor_encode_array(uint8_t *buf, size_t size, size_t *pos, size_t len)
 }
 
 // 11. encode indefinite-length array
-int cbor_encode_array_indef(uint8_t *buf, size_t size, size_t *pos, size_t len)
+int cbor_encode_array_indef(uint8_t *buf, size_t size, size_t *pos)
 {
 	return __cbor_encode_indef(buf, size, pos, IB_ARRAY);
 }
@@ -236,13 +236,13 @@ int cbor_encode_map(uint8_t *buf, size_t size, size_t *pos, size_t len)
 }
 
 // 13. encode indefinite-length map
-int cbor_encode_map_indef(uint8_t *buf, size_t size, size_t *pos, size_t len)
+int cbor_encode_map_indef(uint8_t *buf, size_t size, size_t *pos)
 {
 	return __cbor_encode_indef(buf, size, pos, IB_MAP);
 }
 
 // 14. encode break code
-int cbor_encode_break(uint8_t *buf, size_t size, size_t *pos, const uint8_t *bytes, size_t len)
+int cbor_encode_break(uint8_t *buf, size_t size, size_t *pos)
 {
 	if (ensure_capacity(buf, size, *pos + 1))
 	{
