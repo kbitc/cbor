@@ -73,7 +73,7 @@ int cbor_bytes_len(cbor_t *cbor, size_t *len)
 	}
 	else
 	{
-		return -1;
+		return CBOR_ERR_MT_MISMATCH;
 	}
 }
 
@@ -116,7 +116,7 @@ int cbor_bytes_cmp(cbor_t *cbor, const void *buf, size_t size, int *res)
 	}
 	else
 	{
-		return -1;
+		return CBOR_ERR_MT_MISMATCH;
 	}
 }
 
@@ -124,12 +124,12 @@ int cbor_array_get(cbor_t *cbor, size_t index, cbor_t *val)
 {
 	if (cbor->ct != CBOR_ARRAY)
 	{
-		return -1;
+		return CBOR_ERR_MT_MISMATCH;
 	}
 
 	if (index >= cbor->count)
 	{
-		return -2;
+		return CBOR_ERR_ARRAY_INDEX_OUT_OF_BOUNDS;
 	}
 
 	size_t pos = 0;
@@ -148,7 +148,7 @@ int cbor_map_get(cbor_t *cbor, const char *key, cbor_t *val)
 {
 	if (cbor->ct != CBOR_MAP)
 	{
-		return -1;
+		return CBOR_ERR_MT_MISMATCH;
 	}
 
 	for (size_t i = 0, pos = 0; i < cbor->count; i += 2)
@@ -188,5 +188,5 @@ int cbor_map_get(cbor_t *cbor, const char *key, cbor_t *val)
 			return ret;
 		}
 	}
-	return -2;
+	return CBOR_ERR_MAP_KEY_MISMATCH;
 }
