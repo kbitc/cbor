@@ -114,6 +114,9 @@ typedef struct _cbor_t
 } cbor_t;
 
 
+cbor_t *cbor_create();
+void cbor_free(cbor_t *cbor);
+
 const char *cbor_get_error(int errno);
 
 int cbor_verify(uint8_t *buf, size_t size, size_t *pos);
