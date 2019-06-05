@@ -24,7 +24,7 @@
 
 #include "cbor.h"
 
-int cbor_verify_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag)
+int cbor_verify_tag(const uint8_t *buf, size_t size, size_t *pos, uint64_t tag)
 {
 	(void) tag;
 	return cbor_verify(buf, size, pos);
