@@ -24,7 +24,7 @@
 
 #include "cbor.h"
 
-int cbor_decode_tag(uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor)
+int cbor_decode_tag(const uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor)
 {
 	(void) tag;
 	return cbor_decode(buf, size, pos, cbor);
