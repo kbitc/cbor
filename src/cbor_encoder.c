@@ -48,27 +48,27 @@ static int __cbor_encode_uint(uint8_t *buf, size_t size, size_t *pos, uint8_t ib
 
 	if (len == 0)
 	{
-		buf[*pos] = ib_mt | val;
+		buf[(*pos)++] = ib_mt | val;
 	}
 	else if (len == 1)
 	{
-		buf[*pos] = ib_mt | AI_1;
-		buf[++*pos] = val;
+		buf[(*pos)++] = ib_mt | AI_1;
+		buf[*pos] = val;
 	}
 	else if (len == 2)
 	{
-		buf[*pos] = ib_mt | AI_2;
-		stonb((uint16_t)val, buf + ++*pos);
+		buf[(*pos)++] = ib_mt | AI_2;
+		stonb((uint16_t)val, buf + *pos);
 	}
 	else if (len == 5)
 	{
-		buf[*pos] = ib_mt | AI_4;
-		ltonb((uint32_t)val, buf + ++*pos);
+		buf[(*pos)++] = ib_mt | AI_4;
+		ltonb((uint32_t)val, buf + *pos);
 	}
 	else // if (len == 8)
 	{
-		buf[*pos] = ib_mt | AI_8;
-		lltonb(val, buf + ++*pos);
+		buf[(*pos)++] = ib_mt | AI_8;
+		lltonb(val, buf + *pos);
 	}
 
 	*pos += len;
