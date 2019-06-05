@@ -85,40 +85,40 @@ uint64_t endian_swap64(uint64_t n)
 }
 
 
-uint16_t nbtos(uint8_t *p)
+uint16_t nbtos(const uint8_t *p)
 {
 	uint16_t u = 0;
 	memcpy(&u, p, sizeof(uint16_t));
 	return ntohs(u);
 }
 
-uint32_t nbtol(uint8_t *p)
+uint32_t nbtol(const uint8_t *p)
 {
 	uint32_t u = 0;
 	memcpy(&u, p, sizeof(uint32_t));
 	return ntohl(u);
 }
 
-uint64_t nbtoll(uint8_t *p)
+uint64_t nbtoll(const uint8_t *p)
 {
 	uint64_t u = 0;
 	memcpy(&u, p, sizeof(uint64_t));
 	return ntohll(u);
 }
 
-half nbtoh(uint8_t *p)
+half nbtoh(const uint8_t *p)
 {
 	uint16_t u = nbtos(p);
 	return *((half *)&u);
 }
 
-float nbtof(uint8_t *p)
+float nbtof(const uint8_t *p)
 {
 	uint32_t u = nbtol(p);
 	return *((float *)&u);
 }
 
-double nbtod(uint8_t *p)
+double nbtod(const uint8_t *p)
 {
 	uint64_t u = nbtoll(p);
 	return *((double *)&u);
