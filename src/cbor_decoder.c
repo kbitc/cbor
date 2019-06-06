@@ -125,19 +125,19 @@ int cbor_decode(const uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 		}
 		else // if (ib_mt == IB_PRIM)
 		{
-			if (ib_ai == 20)
+			if (ib_ai == AI_FALSE)
 			{
 				cbor->ct = CBOR_FALSE;
 			}
-			else if (ib_ai == 21)
+			else if (ib_ai == AI_TRUE)
 			{
 				cbor->ct = CBOR_TRUE;
 			}
-			else if (ib_ai == 22)
+			else if (ib_ai == AI_NULL)
 			{
 				cbor->ct = CBOR_NULL;
 			}
-			else if (ib_ai == 23)
+			else if (ib_ai == AI_UNDEFINED)
 			{
 				cbor->ct = CBOR_UNDEFINED;
 			}
