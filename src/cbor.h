@@ -60,9 +60,10 @@ extern "C" {
 #define CBOR_ERR_BYTES_TEXT_MISMATCH						7
 #define CBOR_ERR_OUT_OF_MEMORY								8
 #define CBOR_ERR_SIMPLE_OUT_OF_SCOPE						9
-#define CBOR_ERR_MT_MISMATCH								10
-#define CBOR_ERR_ARRAY_INDEX_OUT_OF_BOUNDS					11
-#define CBOR_ERR_MAP_KEY_MISMATCH							12
+#define CBOR_ERR_CHUNK_INDEX_OUT_OF_BOUNDS					10
+#define CBOR_ERR_MT_MISMATCH								11
+#define CBOR_ERR_ARRAY_INDEX_OUT_OF_BOUNDS					12
+#define CBOR_ERR_MAP_KEY_MISMATCH							13
 
 typedef enum
 {
@@ -131,8 +132,9 @@ int cbor_decode(const uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor);
 int cbor_decode_tag(const uint8_t *buf, size_t size, size_t *pos, uint64_t tag, cbor_t *cbor);
 
 int cbor_bytes_len(cbor_t *cbor, size_t *len);
-int cbor_bytes_cmp(cbor_t *cbor, const void *bytes, size_t size, int *res);
-
+int cbor_bytes_compare(cbor_t *cbor, const void *buf, size_t size, int *res);
+int cbor_bytes_copy(void *dest, cbor_t *src, size_t size, size_t *len);
+int cbor_chunk_get(cbor_t *cbor, size_t index, cbor_t *val);
 int cbor_array_get(cbor_t *cbor, size_t index, cbor_t *val);
 int cbor_map_get(cbor_t *cbor, const char *key, cbor_t *val);
 
