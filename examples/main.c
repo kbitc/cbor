@@ -22,42 +22,42 @@
 **
 ****************************************************************************/
 
-#include "../src/cbor.h"
+#include "cbor.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-void print_cbor(const char *key, cbor_t *val)
+void print_cbor(cbor_t *val)
 {
 	switch (val->ct)
 	{
 		case CBOR_FALSE:
-			printf("%s: false", key);
+			printf("false");
 			break;
 		case CBOR_TRUE:
-			printf("%s: true", key);
+			printf("true");
 			break;
 		case CBOR_NULL:
-			printf("%s: null", key);
+			printf("null");
 			break;
 		case CBOR_UNDEFINED:
-			printf("%s: undefined", key);
+			printf("undefined");
 			break;
 		case CBOR_SIMPLE:
 		case CBOR_UINT:
-			printf("%s: %u", key, val->v.uint);
+			printf("%u", val->v.uint);
 			break;
 		case CBOR_NEGINT:
-			printf("%s: %d", key, val->v.sint);
+			printf("%d", val->v.sint);
 			break;
 		case CBOR_FLOAT:
-			printf("%s: %f", key, val->v.flt);
+			printf("%f", val->v.flt);
 			break;
 		case CBOR_DOUBLE:
-			printf("%s: %f", key, val->v.dbl);
+			printf("%f", val->v.dbl);
 			break;
 		case CBOR_TAG:
-			printf("%s: %u(", key, val->v.uint);
-			print_cbor("val", val->next);
+			printf("%u(", val->v.uint);
+			print_cbor(val->next);
 			printf(")");
 			break;
 		case CBOR_BYTES:
@@ -73,11 +73,19 @@ void print_cbor(const char *key, cbor_t *val)
 
 			size_t copied_len;
 			cbor_bytes_copy(bytes, val, len, &copied_len);
-			printf("%s: ", key);
+			printf("Buffer<");
 			for (size_t i = 0; i < copied_len; i++)
 			{
-				printf("%02x", bytes[i]);
+				if (i == 0)
+				{
+					printf("%02x", bytes[i]);
+				}
+				else
+				{
+					printf(" %02x", bytes[i]);
+				}
 			}
+			printf(">");
 
 			free(bytes);
 			break;
@@ -96,7 +104,7 @@ void print_cbor(const char *key, cbor_t *val)
 			size_t copied_len;
 			cbor_bytes_copy(str, val, len, &copied_len);
 			str[copied_len - 1] = '\0';
-			printf("%s: %s", key, str);
+			printf("\"%s\"", str);
 
 			free(str);
 			break;
@@ -166,36 +174,93 @@ int main()
 
 	cbor_encode_break(buf, size, &pos);					// end indefinite-length map
 	
-	printf("[CBOR]: ");
+	printf("[CBOR]: \n");
 	for (int i = 0; i < pos; i++)
 	{
 		printf("%02x", buf[i]);
 	}
-	printf("\r\n");
+	printf("\n\n");
 
 	
 	// 2. decoding
+	printf("[JSON]: \n");
+
 	size_t err_pos = 0;
 	cbor_t *cbor = cbor_create();
 	int ret = cbor_decode(buf, size, &err_pos, cbor);
 	if (ret != CBOR_NO_ERROR)
 	{
-		printf("pos = %d, errno = %d, errText = %s\r\n", err_pos, ret, cbor_get_error(ret));
+		printf("pos = %d, errno = %d, errText = %s\n", err_pos, ret, cbor_get_error(ret));
 		return 1;
 	}
 
 	cbor_t *val = cbor_create();
+	printf("{");
 
 	cbor_map_get(cbor, "uint", val);
-	print_cbor("\nuint", val);
+	printf("\"uint\": ");
+	print_cbor(val);
 
 	cbor_map_get(cbor, "int", val);
-	print_cbor("\nint", val);
+	printf(", \"int\": ");
+	print_cbor(val);
 
 	cbor_map_get(cbor, "float", val);
-	print_cbor("\nfloat", val);
+	printf(", \"float\": ");
+	print_cbor(val);
 
-	printf("\n");
+	cbor_map_get(cbor, "simple", val);
+	printf(", \"simple\": ");
+	print_cbor(val);
+
+	cbor_map_get(cbor, "bytes", val);
+	printf(", \"bytes\": ");
+	print_cbor(val);
+
+	cbor_map_get(cbor, "string", val);
+	printf(", \"string\": ");
+	print_cbor(val);
+
+	cbor_map_get(cbor, "tag", val);
+	printf(", \"tag\": ");
+	print_cbor(val);
+
+	cbor_map_get(cbor, "string_indef", val);
+	printf(", \"string_indef\": ");
+	print_cbor(val);
+
+	cbor_map_get(cbor, "map", val);
+	cbor_t *subval = cbor_create();
+	printf(", \"map\": {");
+
+	cbor_map_get(val, "uint1", subval);
+	printf("\"uint1\": ");
+	print_cbor(subval);
+
+	cbor_map_get(val, "uint2", subval);
+	printf(", \"uint2\": ");
+	print_cbor(subval);
+
+	printf("}");
+
+	cbor_map_get(cbor, "array", val);
+	printf(", \"array\": [");
+
+	for (int i = 0; i < val->count; i++)
+	{
+		cbor_array_get(val, i, subval);
+		if (i > 0)
+		{
+			printf(", ");
+		}
+		print_cbor(subval);
+	}
+
+	printf("]");
+
+	printf("}\n");
+
+	cbor_free(subval);
 
 	cbor_free(val);
 
