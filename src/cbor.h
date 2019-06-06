@@ -50,6 +50,11 @@ extern "C" {
 #define AI_INDEF											31
 #define AI_BRKCD											0xFF
 
+#define AI_FALSE											20	
+#define AI_TRUE												21
+#define AI_NULL												22
+#define AI_UNDEFINED										23
+
 #define CBOR_NO_ERROR										0
 #define CBOR_ERR_OUT_OF_DATA								1
 #define CBOR_ERR_NOT_ALL_DATA_CONSUMED						2
