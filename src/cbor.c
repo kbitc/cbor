@@ -60,14 +60,14 @@ int cbor_bytes_len(cbor_t *cbor, size_t *len)
 		*len = 0;
 		for (size_t i = 0, pos = 0; i < cbor->count; i++)
 		{
-			cbor_t item;
-			int ret = cbor_decode(cbor->v.bytes, cbor->size, &pos, &item);
+			cbor_t chunk;
+			int ret = cbor_decode(cbor->v.bytes, cbor->size, &pos, &chunk);
 			if (ret != CBOR_NO_ERROR)
 			{
 				return ret;
 			}
 
-			*len += item.size;
+			*len += chunk.size;
 		}
 		return CBOR_NO_ERROR;
 	}
@@ -77,7 +77,7 @@ int cbor_bytes_len(cbor_t *cbor, size_t *len)
 	}
 }
 
-int cbor_bytes_cmp(cbor_t *cbor, const void *buf, size_t size, int *res)
+int cbor_bytes_compare(cbor_t *cbor, const void *buf, size_t size, int *res)
 {
 	if (cbor->ct == CBOR_BYTES || cbor->ct == CBOR_STRING)
 	{
@@ -93,14 +93,14 @@ int cbor_bytes_cmp(cbor_t *cbor, const void *buf, size_t size, int *res)
 	{
 		for (size_t i = 0, pos1 = 0, pos2 = 0; i < cbor->count && pos2 < size; i++)
 		{
-			cbor_t item;
-			int ret = cbor_decode(cbor->v.bytes, cbor->size, &pos1, &item);
+			cbor_t chunk;
+			int ret = cbor_decode(cbor->v.bytes, cbor->size, &pos1, &chunk);
 			if (ret != CBOR_NO_ERROR)
 			{
 				return ret;
 			}
 
-			ret = cbor_bytes_cmp(&item, buf + pos2, item.size, res);
+			ret = cbor_bytes_compare(&chunk, buf + pos2, chunk.size, res);
 			if (ret != CBOR_NO_ERROR)
 			{
 				return ret;
@@ -110,7 +110,7 @@ int cbor_bytes_cmp(cbor_t *cbor, const void *buf, size_t size, int *res)
 			{
 				break;
 			}
-			pos2 += item.size;
+			pos2 += chunk.size;
 		}
 		return CBOR_NO_ERROR;
 	}
@@ -118,6 +118,63 @@ int cbor_bytes_cmp(cbor_t *cbor, const void *buf, size_t size, int *res)
 	{
 		return CBOR_ERR_MT_MISMATCH;
 	}
+}
+
+int cbor_bytes_copy(void *dest, cbor_t *src, size_t size, size_t *len)
+{
+	if (src->ct == CBOR_BYTES || src->ct == CBOR_STRING)
+	{
+		*len = size > src->size ? src->size : size;
+		memcpy(dest, src->v.bytes, *len);
+		return CBOR_NO_ERROR;
+	}
+	else if (src->ct == CBOR_BYTES_INDEF || src->ct == CBOR_STRING_INDEF)
+	{
+		*len = 0;
+		for (size_t i = 0, pos = 0; i < src->count && size > 0; i++)
+		{
+			cbor_t chunk;
+			int ret = cbor_decode(src->v.bytes, src->size, &pos, &chunk);
+			if (ret != CBOR_NO_ERROR)
+			{
+				return ret;
+			}
+
+			size_t cnt = size > chunk.size ? chunk.size : size;
+			memcpy(dest + *len, chunk.v.bytes, cnt);
+			*len += cnt;
+			size -= cnt;
+		}
+		return CBOR_NO_ERROR;
+	}
+	else
+	{
+		return CBOR_ERR_MT_MISMATCH;
+	}
+}
+
+int cbor_chunk_get(cbor_t *cbor, size_t index, cbor_t *val)
+{
+	if (cbor->ct != CBOR_BYTES_INDEF && cbor->ct != CBOR_STRING_INDEF)
+	{
+		return CBOR_ERR_MT_MISMATCH;
+	}
+
+	if (index >= cbor->count)
+	{
+		return CBOR_ERR_CHUNK_INDEX_OUT_OF_BOUNDS;
+	}
+
+	size_t pos = 0;
+	for (size_t i = 0; i < index; i++)
+	{
+		int ret = cbor_verify(cbor->v.bytes, cbor->size, &pos);
+		if (ret != CBOR_NO_ERROR)
+		{
+			return ret;
+		}
+	}
+	return cbor_decode(cbor->v.bytes, cbor->size, &pos, val);
 }
 
 int cbor_array_get(cbor_t *cbor, size_t index, cbor_t *val)
@@ -170,7 +227,7 @@ int cbor_map_get(cbor_t *cbor, const char *key, cbor_t *val)
 		else if (_key.ct == CBOR_STRING_INDEF)
 		{
 			int res = 0;
-			ret = cbor_bytes_cmp(&_key, key, strlen(key), &res);
+			ret = cbor_bytes_compare(&_key, key, strlen(key), &res);
 			if (ret != CBOR_NO_ERROR)
 			{
 				return ret;
