@@ -109,10 +109,13 @@ int cbor_decode(const uint8_t *buf, size_t size, size_t *pos, cbor_t *cbor)
 			cbor->ct = CBOR_TAG;
 			cbor->v.uint = val;
 
-			cbor->next = cbor_create();
 			if (cbor->next == NULL)
 			{
-				return CBOR_ERR_OUT_OF_MEMORY;
+				cbor->next = cbor_create();
+				if (cbor->next == NULL)
+				{
+					return CBOR_ERR_OUT_OF_MEMORY;
+				}
 			}
 			
 			int ret = cbor_decode_tag(buf, size, pos, val, cbor->next);
