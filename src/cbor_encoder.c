@@ -60,7 +60,7 @@ static int __cbor_encode_uint(uint8_t *buf, size_t size, size_t *pos, uint8_t ib
 		buf[(*pos)++] = ib_mt | AI_2;
 		stonb((uint16_t)val, buf + *pos);
 	}
-	else if (len == 5)
+	else if (len == 4)
 	{
 		buf[(*pos)++] = ib_mt | AI_4;
 		ltonb((uint32_t)val, buf + *pos);
